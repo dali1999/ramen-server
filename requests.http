@@ -10,7 +10,7 @@ Content-Type: application/json
 ### 2. 멤버 추가 - 경수 (필수)
 POST http://localhost:3000/api/members
 Content-Type: application/json
-
+a
 {
   "name": "경수",
   "nickname": "국물 장인"
