@@ -56,7 +56,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = filetypes.test(file.mimetype);
@@ -67,24 +67,25 @@ const upload = multer({
     if (mimetype && extname) {
       return cb(null, true);
     }
-    cb("오류: 이미지 파일만 가능합니다!");
+    cb(
+      new Error("오류: 이미지 파일만 가능합니다! (jpeg, jpg, png, gif, webp)")
+    );
   },
 });
 
 // --- 4. Mongoose 스키마 및 모델 정의 ---
 
 // 4.1. 방문 멤버 스키마 (VisitMemberSchema)
-// 라멘집 방문 시 함께한 멤버와 그들이 남긴 별점 정보를 정의합니다.
 const VisitMemberSchema = new mongoose.Schema(
   {
     name: { type: String, required: true }, // 멤버 이름 (필수)
+    imageUrl: { type: String },
     rating: { type: Number, min: 0, max: 5, default: null }, // 별점 (0~5점, 초기값은 null 허용)
   },
   { _id: false }
 );
 
 // 4.2. 방문 기록 스키마 (VisitSchema)
-// 라멘집의 특정 방문에 대한 상세 정보를 정의합니다.
 const VisitSchema = new mongoose.Schema(
   {
     visit_count: { type: Number, required: true, default: 1 }, // 해당 라멘집 방문 횟수
@@ -95,7 +96,6 @@ const VisitSchema = new mongoose.Schema(
 );
 
 // 4.3. 라멘집 스키마 (RamenRestaurantSchema)
-// 방문한 라멘집의 주요 정보와 모든 방문 기록을 정의합니다.
 const RamenRestaurantSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true }, // 라멘집 이름 (필수, 고유해야 함)
   bannerImageUrl: {
@@ -109,15 +109,13 @@ const RamenRestaurantSchema = new mongoose.Schema({
 });
 
 // 4.4. 멤버 스키마 (MemberSchema)
-// 라멘집을 방문할 수 있는 멤버들의 정보를 정의합니다.
 const MemberSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
-  nickname: { type: String, default: "" },
+  nickname: { type: String, default: "맨즈" },
   imageUrl: {
     type: String,
-    default: "",
+    default: "/uploads/default-profile.png",
   },
-  // ✨ 추가: 로그인 인증을 위한 필드 ✨
   email: {
     type: String,
     required: true,
@@ -138,7 +136,6 @@ MemberSchema.pre("save", async function (next) {
 });
 
 // 4.5. 방문 예정 라멘집 스키마 (PlannedRamenRestaurantSchema)
-// 아직 방문하지 않았지만 방문할 예정인 라멘집 정보를 정의합니다.
 const PlannedRamenRestaurantSchema = new mongoose.Schema({
   name: { type: String, required: true }, // 라멘집 이름 (필수)
   bannerImageUrl: {
@@ -172,7 +169,7 @@ const PlannedRamenRestaurant = mongoose.model(
 // --- JWT 인증 미들웨어 정의 ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1]; // 'Bearer TOKEN' 형식
+  const token = authHeader && authHeader.split(" ")[1];
 
   if (token == null) {
     return res.status(401).json({ message: "인증 토큰이 필요합니다." });
@@ -184,8 +181,8 @@ const authenticateToken = (req, res, next) => {
         .status(403)
         .json({ message: "유효하지 않거나 만료된 토큰입니다." });
     }
-    req.user = user; // 토큰에서 추출된 사용자 정보 (예: _id, name, email)를 req 객체에 저장
-    next(); // 다음 미들웨어 또는 라우트 핸들러로 제어권 넘기기
+    req.user = user;
+    next();
   });
 };
 
@@ -193,25 +190,10 @@ const authenticateToken = (req, res, next) => {
 // --- 5. API 엔드포인트 정의 ---
 // ===============================================
 
-// 5.0.1. 회원가입 API (POST /api/auth/register)
+// 5.0.1. 회원가입 API
 app.post(
   "/api/auth/register",
   upload.single("profileImage"),
-  (req, res, next) => {
-    upload.single("profileImage")(req, res, function (err) {
-      if (err instanceof multer.MulterError) {
-        // Multer 오류 (예: 파일 크기 초과)
-        return res
-          .status(400)
-          .json({ message: `파일 업로드 오류: ${err.message}` });
-      } else if (err) {
-        // 기타 알 수 없는 오류 (예: fileFilter에서 전달한 문자열)
-        // fileFilter에서 `cb("오류: 이미지 파일만 가능합니다!")`와 같이 문자열을 넘기면 이 부분으로 들어옵니다.
-        return res.status(400).json({ message: err }); // err가 문자열이므로 그대로 반환
-      }
-      next(); // 오류 없으면 다음 미들웨어(async (req, res) => { ... })로 진행
-    });
-  },
   async (req, res) => {
     const { name, nickname, email, password } = req.body;
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
@@ -246,9 +228,7 @@ app.post(
         password,
       });
       await newMember.save();
-      console.log("123123123");
-      console.log(req.file);
-      console.log(imageUrl);
+
       res.status(201).json({
         message: "맨즈가 되셨습니다!",
         member: {
@@ -256,6 +236,7 @@ app.post(
           name: newMember.name,
           email: newMember.email,
           imageUrl: newMember.imageUrl,
+          nickname: newMember.nickname,
         },
       });
     } catch (error) {
@@ -268,18 +249,19 @@ app.post(
       if (error.code === 11000) {
         return res
           .status(409)
-          .json({ message: "Name or email already exists." });
+          .json({ message: "이름 또는 이메일이 이미 존재합니다." });
       }
       res
         .status(500)
-        .json({ message: "A server error occurred.", error: error.message });
+        .json({ message: "서버 오류 발생.", error: error.message });
     }
   }
 );
 
-// 5.0.2. 로그인 API (POST /api/auth/login)
+// 5.0.2. 로그인 API
 app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
+  console.log("123123123");
 
   if (!email || !password) {
     return res.status(400).json({ message: "이메일과 비밀번호는 필수입니다." });
@@ -322,9 +304,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// 5.1. 방문한 라멘집 추가 API (POST /api/visited-ramen)
-// - 라멘집 이름, 메인 사진, 위치, 방문일자, 함께 방문한 멤버(별점 없이)를 받습니다.
-// - 재방문 시 visit_count가 올라가고, 첫 방문 시 새로운 라멘집 데이터가 생성됩니다.
+// 5.1. 방문한 라멘집 추가
 app.post("/api/visited-ramen", authenticateToken, async (req, res) => {
   const {
     name,
@@ -345,15 +325,19 @@ app.post("/api/visited-ramen", authenticateToken, async (req, res) => {
     const processedMembers = [];
     if (initialVisitMembers && initialVisitMembers.length > 0) {
       for (const member of initialVisitMembers) {
-        // 멤버가 시스템에 등록된 멤버인지 확인
         const existingMember = await Member.findOne({ name: member.name });
+        console.log(existingMember);
         if (!existingMember) {
           return res.status(400).json({
             message: `'${member.name}' 이름의 멤버는 존재하지 않습니다. 먼저 멤버를 추가해주세요.`,
           });
         }
         // 초기 방문 시에는 별점을 받지 않으므로, rating은 null로 저장
-        processedMembers.push({ name: member.name, rating: null });
+        processedMembers.push({
+          name: existingMember.name,
+          imageUrl: existingMember.imageUrl,
+          rating: null,
+        });
       }
     }
 
@@ -411,6 +395,7 @@ app.post("/api/visited-ramen", authenticateToken, async (req, res) => {
         message: "새로운 라멘집이 성공적으로 추가되었습니다.",
         restaurant: newRamenRestaurant,
       });
+      console.log(newRamenRestaurant);
     }
   } catch (error) {
     console.error("라멘집 추가/업데이트 오류:", error);
@@ -426,42 +411,7 @@ app.post("/api/visited-ramen", authenticateToken, async (req, res) => {
   }
 });
 
-// 5.2. 멤버 추가 API (POST /api/members)
-// - 새로운 멤버를 시스템에 등록합니다. 이름은 필수입니다.
-// app.post("/api/members", async (req, res) => {
-//   const { name, nickname, imageUrl } = req.body;
-
-//   if (!name) {
-//     return res.status(400).json({ message: "멤버 이름은 필수입니다." });
-//   }
-
-//   try {
-//     const newMember = new Member({
-//       name,
-//       nickname,
-//       imageUrl,
-//     });
-//     await newMember.save(); // 새 멤버 저장
-//     console.log(`새로운 멤버 추가: ${name}`);
-//     res.status(201).json({
-//       message: "멤버가 성공적으로 추가되었습니다.",
-//       member: newMember,
-//     });
-//   } catch (error) {
-//     console.error("멤버 추가 오류:", error);
-//     if (error.code === 11000) {
-//       // MongoDB의 고유(unique) 인덱스 중복 오류
-//       return res
-//         .status(409)
-//         .json({ message: `'${name}' 이름의 멤버가 이미 존재합니다.` });
-//     }
-//     res
-//       .status(500)
-//       .json({ message: "서버 오류가 발생했습니다.", error: error.message });
-//   }
-// });
-
-// 5.3. 방문 예정 라멘집 추가 API (POST /api/planned-ramen)
+// 5.3. 방문 예정 라멘집 추가 API
 app.post("/api/planned-ramen", authenticateToken, async (req, res) => {
   const { name, bannerImageUrl, location, recommendationComment } = req.body;
   const recommenderId = req.user._id;
@@ -515,8 +465,7 @@ app.post("/api/planned-ramen", authenticateToken, async (req, res) => {
   }
 });
 
-// 5.4. 멤버별 라멘집 별점 추가/수정 API (PATCH /api/visited-ramen/:restaurantId/visits/:visitCount/members/:memberName/rating)
-// - 특정 라멘집의 특정 방문 기록에 대해, 특정 멤버의 별점을 추가하거나 수정합니다.
+// 5.4. 멤버별 라멘집 별점 추가/수정 API
 app.patch(
   "/api/visited-ramen/:restaurantId/visits/:visitCount/members/:memberName/rating",
   authenticateToken,
@@ -598,9 +547,8 @@ app.patch(
   }
 );
 
-// ✨ 5.5. 방문한 라멘집 삭제 API (DELETE /api/visited-ramen/:id) ✨
-// - 특정 ID의 방문한 라멘집 데이터를 삭제합니다.
-app.delete("/api/visited-ramen/:id", authenticateToken, async (req, res) => {
+// 5.5. 방문한 라멘집 삭제 API
+app.delete("/api/visited-ramen/:id", async (req, res) => {
   try {
     const { id } = req.params; // URL 파라미터에서 라멘집 ID 추출
 
@@ -626,8 +574,7 @@ app.delete("/api/visited-ramen/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// ✨ 5.6. 방문 예정 라멘집 삭제 API (DELETE /api/planned-ramen/:id) ✨
-// - 특정 ID의 방문 예정 라멘집 데이터를 삭제합니다.
+// 5.6. 방문 예정 라멘집 삭제 API
 app.delete("/api/planned-ramen/:id", async (req, res) => {
   try {
     const { id } = req.params; // URL 파라미터에서 라멘집 ID 추출
@@ -654,8 +601,7 @@ app.delete("/api/planned-ramen/:id", async (req, res) => {
   }
 });
 
-// ✨ 5.6. 멤버 삭제 API (DELETE /api/members/:id) ✨
-// - 특정 ID의 방문 예정 라멘집 데이터를 삭제합니다.
+// 5.6. 멤버 삭제 API
 app.delete("/api/members/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -682,7 +628,7 @@ app.delete("/api/members/:id", async (req, res) => {
 // --- (선택사항) 데이터 확인을 위한 GET 엔드포인트 ---
 // ===============================================
 
-// 모든 방문 라멘집 조회 (GET /api/visited-ramen)
+// 모든 방문 라멘집 조회
 app.get("/api/visited-ramen", async (req, res) => {
   try {
     const ramenRestaurants = await RamenRestaurant.find({}); // 모든 라멘집 데이터 조회
@@ -695,7 +641,7 @@ app.get("/api/visited-ramen", async (req, res) => {
   }
 });
 
-// 특정 라멘집 상세 조회 (ID 기준) (GET /api/visited-ramen/:id)
+// 특정 라멘집 상세 조회 (ID 기준)
 app.get("/api/visited-ramen/:id", async (req, res) => {
   try {
     const restaurant = await RamenRestaurant.findById(req.params.id);
@@ -713,7 +659,7 @@ app.get("/api/visited-ramen/:id", async (req, res) => {
   }
 });
 
-// 모든 멤버 조회 (GET /api/members)
+// 모든 멤버 조회
 app.get("/api/members", async (req, res) => {
   try {
     const members = await Member.find({}); // 모든 멤버 데이터 조회
@@ -726,7 +672,7 @@ app.get("/api/members", async (req, res) => {
   }
 });
 
-// 모든 방문 예정 라멘집 조회 (GET /api/planned-ramen)
+// 모든 방문 예정 라멘집 조회
 app.get("/api/planned-ramen", async (req, res) => {
   try {
     const plannedRamenRestaurants = await PlannedRamenRestaurant.find(
