@@ -19,7 +19,11 @@ const port = process.env.PORT || 3000;
 // --- CORS 설정 ---
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://ramen-road.netlify.app"],
+    origin: [
+      "http://localhost:5173",
+      "http://192.168.55.112:5173",
+      "https://ramen-road.netlify.app",
+    ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -32,7 +36,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // --- MongoDB 연결 ---
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
-  console.error("❌ MONGODB_URI 환경 변수가 설정되지 않았습니다. .env 파일을 확인해주세요.");
+  console.error(
+    "❌ MONGODB_URI 환경 변수가 설정되지 않았습니다. .env 파일을 확인해주세요."
+  );
   process.exit(1);
 }
 
@@ -55,6 +61,8 @@ app.use(errorHandler);
 
 // --- 서버 시작 ---
 app.listen(port, () => {
-  console.log(`🍜 라멘 API 서버가 http://localhost:${port} 에서 실행 중입니다.`);
+  console.log(
+    `🍜 라멘 API 서버가 http://localhost:${port} 에서 실행 중입니다.`
+  );
   console.log("Ctrl+C를 눌러 서버를 종료하세요.");
 });
