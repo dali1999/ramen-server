@@ -26,6 +26,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
         processedMembers.push({
           name: existingMember.name,
           imageUrl: existingMember.imageUrl,
+          role: existingMember.role,
           rating: null,
         });
       }
@@ -100,6 +101,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 router.patch("/:restaurantId/visits/:visitCount/members/:memberName/rating", authenticateToken, async (req, res, next) => {
   const { restaurantId, visitCount, memberName } = req.params; // URL 파라미터에서 라멘집 ID, 방문 횟수, 멤버 이름 추출
   const { rating } = req.body; // 요청 본문에서 별점 추출
+  const loggedInMemberId = req.user._id;
 
   // 별점 유효성 검사 (0~5점)
   if (rating === undefined || rating === null || rating < 0 || rating > 5) {

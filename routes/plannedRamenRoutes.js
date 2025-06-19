@@ -40,6 +40,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
         recommendedBy: {
           _id: existingRecommender._id,
           name: existingRecommender.name,
+          role: existingRecommender.role,
           nickname: existingRecommender.nickname,
           imageUrl: existingRecommender.imageUrl,
         },
@@ -78,7 +79,7 @@ router.delete("/:id", authenticateToken, authorizeAdmin, async (req, res, next) 
 router.get("/", async (req, res, next) => {
   // authenticateToken을 여기에도 적용할 수 있음
   try {
-    const plannedRamenRestaurants = await PlannedRamenRestaurant.find({}).populate("recommendedBy", "name nickname imageUrl");
+    const plannedRamenRestaurants = await PlannedRamenRestaurant.find({}).populate("recommendedBy", "name nickname imageUrl role");
     res.status(200).json(plannedRamenRestaurants);
   } catch (error) {
     console.error("Error fetching planned ramen restaurants:", error);
@@ -90,7 +91,10 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   // authenticateToken을 여기에도 적용할 수 있음
   try {
-    const plannedRamenRestaurant = await PlannedRamenRestaurant.findById(req.params.id).populate("recommendedBy", "name nickname imageUrl");
+    const plannedRamenRestaurant = await PlannedRamenRestaurant.findById(req.params.id).populate(
+      "recommendedBy",
+      "name nickname imageUrl role"
+    );
     if (!plannedRamenRestaurant) {
       return res.status(404).json({ message: "해당 라멘집을 찾을 수 없습니다." });
     }
