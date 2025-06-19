@@ -26,6 +26,7 @@ router.post("/register", upload.single("profileImage"), async (req, res, next) =
       imageUrl: imageUrl || MemberSchema.paths.imageUrl.defaultValue,
       email,
       password,
+      role: "user",
     });
     await newMember.save();
 
@@ -37,6 +38,7 @@ router.post("/register", upload.single("profileImage"), async (req, res, next) =
         email: newMember.email,
         imageUrl: newMember.imageUrl,
         nickname: newMember.nickname,
+        role: newMember.role,
       },
     });
   } catch (error) {
@@ -70,7 +72,7 @@ router.post("/login", async (req, res, next) => {
 
     // JWT 토큰 생성
     const token = jwt.sign(
-      { _id: member._id, name: member.name, email: member.email }, // 토큰 페이로드
+      { _id: member._id, name: member.name, email: member.email, role: member.role }, // 토큰 페이로드
       JWT_SECRET,
       { expiresIn: "10h" } // 토큰 유효 기간
     );
@@ -84,6 +86,7 @@ router.post("/login", async (req, res, next) => {
         nickname: member.nickname,
         email: member.email,
         imageUrl: member.imageUrl,
+        role: member.role,
       },
     });
   } catch (error) {

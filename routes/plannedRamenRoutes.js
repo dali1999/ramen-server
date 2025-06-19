@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const PlannedRamenRestaurant = require("../models/PlannedRamenRestaurant");
 const Member = require("../models/Member"); // Member 모델 임포트 (추천자 확인용)
-const authenticateToken = require("../middleware/authMiddleware");
+const { authenticateToken, authorizeAdmin } = require("../middleware/authMiddleware");
 
 // 방문 예정 라멘집 추가 API (POST /api/planned-ramen)
 router.post("/", authenticateToken, async (req, res, next) => {
@@ -55,8 +55,7 @@ router.post("/", authenticateToken, async (req, res, next) => {
 });
 
 // 방문 예정 라멘집 삭제 API (DELETE /api/planned-ramen/:id)
-// authenticateToken 추가 예정
-router.delete("/:id", authenticateToken, async (req, res, next) => {
+router.delete("/:id", authenticateToken, authorizeAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     // const loggedInMemberId = req.user._id;

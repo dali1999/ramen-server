@@ -3,9 +3,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
   console.error("❌ JWT_SECRET 환경 변수가 설정되지 않았습니다. .env 파일을 확인해주세요.");
-  // 실제 프로덕션에서는 이 위치에서 프로세스를 종료하기보다,
-  // 앱 시작 시 유효성 검사를 통해 미리 처리하는 것이 좋습니다.
-  // process.exit(1);
+  process.exit(1);
 }
 
 // --- JWT 인증 미들웨어 정의 ---
@@ -26,4 +24,15 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-module.exports = authenticateToken;
+// ✨ 관리자 역할 확인 미들웨어 ✨
+const authorizeAdmin = (req, res, next) => {
+  // authenticateToken이 먼저 실행되어 req.user가 채워졌다고 가정
+  if (req.user && req.user.role === "admin") {
+    next(); // 관리자면 다음 미들웨어 또는 라우트 핸들러로
+  } else {
+    // 권한 없음
+    return res.status(403).json({ message: "관리자 권한이 필요합니다." });
+  }
+};
+
+module.exports = { authenticateToken, authorizeAdmin };

@@ -17,6 +17,11 @@ const MemberSchema = new mongoose.Schema({
     trim: true,
   },
   password: { type: String, required: true, minlength: 6 },
+  role: {
+    type: String,
+    enum: ["user", "admin"], // 'user' 또는 'admin'만 가능
+    default: "user", // 기본값은 'user'
+  },
 });
 
 // 비밀번호 해싱 미들웨어 (저장하기 전에 실행)

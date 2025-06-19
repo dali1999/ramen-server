@@ -2,8 +2,7 @@ const express = require("express");
 const router = express.Router();
 const RamenRestaurant = require("../models/RamenRestaurant");
 const Member = require("../models/Member"); // Member 모델 임포트 (existingMember 확인용)
-const authenticateToken = require("../middleware/authMiddleware");
-
+const { authenticateToken, authorizeAdmin } = require("../middleware/authMiddleware");
 // 방문한 라멘집 추가 API (POST /api/visited-ramen)
 router.post("/", authenticateToken, async (req, res, next) => {
   const { name, bannerImageUrl, location, visitDate, members: initialVisitMembers } = req.body;
@@ -162,10 +161,9 @@ router.patch("/:restaurantId/visits/:visitCount/members/:memberName/rating", aut
 });
 
 // 방문한 라멘집 삭제 API (DELETE /api/visited-ramen/:id)
-// authenticateToken 추가 예정
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", authenticateToken, authorizeAdmin, async (req, res, next) => {
   try {
-    const { id } = req.params; // URL 파라미터에서 라멘집 ID 추출
+    const { id } = req.params;
 
     // MongoDB에서 해당 ID의 라멘집을 찾아 삭제
     const result = await RamenRestaurant.findByIdAndDelete(id);
