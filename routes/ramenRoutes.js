@@ -17,6 +17,7 @@ router.post(
   async (req, res, next) => {
     const { name, location, visitDate, members, tags } = req.body;
     const bannerImageUrl = req.file ? req.file.location : undefined;
+    const createdBy = req.user._id;
 
     let initialVisitMembers;
     let restaurantTags;
@@ -128,11 +129,12 @@ router.post(
               visit_count: 1,
               visit_date: visitDate,
               members: processedMembers,
-              visitRatingAverage: currentVisitAverage, // ✨ 추가: 현재 방문의 평균 별점 초기화 ✨
+              visitRatingAverage: currentVisitAverage,
             },
           ],
           tags: restaurantTags,
           lastVisitedDate: currentVisitDate,
+          createdBy: createdBy,
         });
         await newRamenRestaurant.save();
         console.log(`새로운 라멘집 추가: ${name}`);
@@ -264,40 +266,57 @@ router.patch(
 );
 
 // 방문한 라멘집 삭제 API (DELETE /api/visited-ramen/:id)
-router.delete(
-  "/:id",
-  authenticateToken,
-  authorizeAdmin,
-  async (req, res, next) => {
-    try {
-      const { id } = req.params;
+router.delete("/:id", authenticateToken, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const loggedInMemberId = req.user._id;
+    const loggedInMemberRole = req.user.role;
 
-      // MongoDB에서 해당 ID의 라멘집을 찾아 삭제
-      const result = await RamenRestaurant.findByIdAndDelete(id);
+    // MongoDB에서 해당 ID의 라멘집을 찾아 삭제
+    const restaurant = await RamenRestaurant.findByIdAndDelete(id);
 
-      if (!result) {
-        // 삭제할 라멘집을 찾지 못한 경우
-        return res
-          .status(404)
-          .json({ message: "삭제할 라멘집을 찾을 수 없습니다." });
-      }
-
-      console.log(`방문한 라멘집 삭제: ID ${id}`);
-      res
-        .status(200)
-        .json({ message: "방문한 라멘집이 성공적으로 삭제되었습니다." });
-    } catch (error) {
-      console.error("방문한 라멘집 삭제 오류:", error);
-      next(error);
+    if (!restaurant) {
+      return res
+        .status(404)
+        .json({ message: "삭제할 라멘집을 찾을 수 없습니다." });
     }
+
+    // 1. 관리자 확인
+    if (loggedInMemberRole === "admin") {
+      await RamenRestaurant.findByIdAndDelete(id);
+      console.log(`관리자에 의해 방문한 라멘집 삭제: ID ${id}`);
+      return res.status(200).json({
+        message: "방문한 라멘집이 성공적으로 삭제되었습니다. (관리자)",
+      });
+    }
+
+    // 2. 일반 사용자일 경우, 자신이 생성한 라멘집인지 확인
+    if (
+      restaurant.createdBy &&
+      restaurant.createdBy.toString() === loggedInMemberId
+    ) {
+      await RamenRestaurant.findByIdAndDelete(id);
+      console.log(`생성자에 의해 방문한 라멘집 삭제: ID ${id}`);
+      return res.status(200).json({
+        message: "방문한 라멘집이 성공적으로 삭제되었습니다. (본인 생성)",
+      });
+    }
+
+    // 3. 권한 없음 (관리자도 아니고 생성자도 아닌 경우)
+    return res
+      .status(403)
+      .json({ message: "이 라멘집을 삭제할 권한이 없습니다." });
+  } catch (error) {
+    console.error("방문한 라멘집 삭제 오류:", error);
+    next(error);
   }
-);
+});
 
 // 모든 방문 라멘집 조회 (GET /api/visited-ramen)
 router.get("/", async (req, res, next) => {
   try {
     const ramenRestaurants = await RamenRestaurant.find({}).sort({
-      lastVisitedDate: -1,
+      createdAt: -1,
     });
     res.status(200).json(ramenRestaurants);
   } catch (error) {

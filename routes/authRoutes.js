@@ -8,48 +8,58 @@ const upload = require("../utils/upload");
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // 회원가입 API
-router.post("/register", upload.single("profileImage"), async (req, res, next) => {
-  const { name, nickname, email, password } = req.body;
-  const imageUrl = req.file ? req.file.location : undefined;
+router.post(
+  "/register",
+  upload.single("profileImage"),
+  async (req, res, next) => {
+    const { name, nickname, email, password } = req.body;
+    const imageUrl = req.file ? req.file.location : undefined;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "이름, 이메일, 비밀번호는 필수입니다." });
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ message: "비밀번호는 최소 6자 이상이어야 합니다." });
-  }
-
-  try {
-    const newMember = new Member({
-      name,
-      nickname,
-      imageUrl: imageUrl || MemberSchema.paths.imageUrl.defaultValue,
-      email,
-      password,
-      role: "user",
-    });
-    await newMember.save();
-
-    res.status(201).json({
-      message: "맨즈가 되셨습니다!",
-      member: {
-        _id: newMember._id,
-        name: newMember.name,
-        email: newMember.email,
-        imageUrl: newMember.imageUrl,
-        nickname: newMember.nickname,
-        role: newMember.role,
-      },
-    });
-  } catch (error) {
-    console.error("회원가입 오류:", error);
-
-    if (error.code === 11000) {
-      return res.status(409).json({ message: "이름 또는 이메일이 이미 존재합니다." });
+    if (!name || !email || !password) {
+      return res
+        .status(400)
+        .json({ message: "이름, 이메일, 비밀번호는 필수입니다." });
     }
-    next(error); // 전역 에러 핸들러로 전달
+    if (password.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "비밀번호는 최소 6자 이상이어야 합니다." });
+    }
+
+    try {
+      const newMember = new Member({
+        name,
+        nickname,
+        imageUrl: imageUrl || MemberSchema.paths.imageUrl.defaultValue,
+        email,
+        password,
+        role: "user",
+      });
+      await newMember.save();
+
+      res.status(201).json({
+        message: "맨즈가 되셨습니다!",
+        member: {
+          _id: newMember._id,
+          name: newMember.name,
+          email: newMember.email,
+          imageUrl: newMember.imageUrl,
+          nickname: newMember.nickname,
+          role: newMember.role,
+        },
+      });
+    } catch (error) {
+      console.error("회원가입 오류:", error);
+
+      if (error.code === 11000) {
+        return res
+          .status(409)
+          .json({ message: "이름 또는 이메일이 이미 존재합니다." });
+      }
+      next(error); // 전역 에러 핸들러로 전달
+    }
   }
-});
+);
 
 // 로그인 API
 router.post("/login", async (req, res, next) => {
@@ -72,9 +82,14 @@ router.post("/login", async (req, res, next) => {
 
     // JWT 토큰 생성
     const token = jwt.sign(
-      { _id: member._id, name: member.name, email: member.email, role: member.role }, // 토큰 페이로드
+      {
+        _id: member._id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+      }, // 토큰 페이로드
       JWT_SECRET,
-      { expiresIn: "10h" } // 토큰 유효 기간
+      { expiresIn: "1y" } // 토큰 유효 기간
     );
 
     res.status(200).json({

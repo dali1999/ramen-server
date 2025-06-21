@@ -37,6 +37,11 @@ const RamenRestaurantSchema = new mongoose.Schema(
     visits: [VisitSchema],
     tags: [{ type: String }],
     lastVisitedDate: { type: Date, default: Date.now },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: true,
+    },
   },
   { timestamps: true }
 );
