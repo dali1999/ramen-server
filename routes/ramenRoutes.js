@@ -354,4 +354,75 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
+//============================= 이미지 업로드
+
+// 5.X. 라멘집 이미지 업로드/수정 API (PATCH /api/visited-ramen/:id/images)
+router.patch(
+  "/:id/images",
+  authenticateToken,
+  upload.array("images", 10),
+  async (req, res, next) => {
+    const { id } = req.params;
+    console.log(id);
+
+    const newImageUrls = req.files
+      ? req.files.map((file) => file.location)
+      : [];
+
+    try {
+      const restaurant = await RamenRestaurant.findById(id);
+      if (!restaurant) {
+        return res.status(404).json({ message: "라멘집을 찾을 수 없습니다." });
+      }
+
+      // 이미지 배열 업데이트: 새 이미지가 있으면 기존 이미지를 덮어씁니다.
+      if (newImageUrls.length > 0) {
+        let updatedImages = newImageUrls.concat(Array.from(restaurant.images));
+        restaurant.images = updatedImages;
+      } else if (req.body.clearAllImages === "true") {
+        restaurant.images = [];
+      } else {
+        if (
+          restaurant.images.length === 0 &&
+          RamenRestaurant.schema.paths.images.defaultValue.length > 0
+        ) {
+          restaurant.images = RamenRestaurant.schema.paths.images.defaultValue;
+        }
+      }
+
+      await restaurant.save();
+
+      const populatedRestaurant = await RamenRestaurant.findById(
+        restaurant._id
+      ).populate("visits.members.memberId", "name nickname imageUrl role");
+
+      res.status(200).json({
+        message: "라멘집 이미지가 성공적으로 업데이트되었습니다.",
+        restaurant: populatedRestaurant,
+      });
+    } catch (error) {
+      console.error("라멘집 이미지 업데이트 오류:", error);
+      next(error);
+    }
+  }
+);
+
+// 5.X. 라멘집 이미지 조회 API (GET /api/visited-ramen/:id/images)
+router.get("/:id/images", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await RamenRestaurant.findById(id);
+
+    if (!restaurant) {
+      return res.status(404).json({ message: "라멘집을 찾을 수 없습니다." });
+    }
+
+    // 이미지 배열만 반환
+    res.status(200).json({ images: restaurant.images });
+  } catch (error) {
+    console.error("라멘집 이미지 조회 오류:", error);
+    next(error);
+  }
+});
+
 module.exports = router;

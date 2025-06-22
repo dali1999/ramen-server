@@ -32,6 +32,15 @@ const VisitSchema = new mongoose.Schema(
 const RamenRestaurantSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, unique: true }, // 라멘집 이름 (필수, 고유)
+
+    images: [
+      {
+        type: String,
+        default:
+          "https://us.123rf.com/450wm/eclaira/eclaira2302/eclaira230200005/198689430-ciotola-di-noodles-di-ramen-con-carne-di-maiale-e-uova-cibo-asiatico-illustrazione-vettoriale.jpg?ver=6",
+      },
+    ],
+
     bannerImageUrl: {
       type: String,
       default:

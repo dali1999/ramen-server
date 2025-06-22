@@ -32,14 +32,14 @@ router.get("/me", authenticateToken, async (req, res, next) => {
 
     // 2. 내가 방문한 라멘집들 및 총 방문 횟수 계산
     const visitedRamenByMe = await RamenRestaurant.find({
-      "visits.members.name": myInfo.name,
-    });
+      "visits.members.memberId": loggedInMemberId,
+    }).populate("visits.members.memberId", "name nickname imageUrl role"); // memberId 필드를 populate
 
     let totalVisitsCount = 0;
     const myVisitedRestaurants = [];
     visitedRamenByMe.forEach((restaurant) => {
       const myVisitsInThisRestaurant = restaurant.visits.filter((visit) =>
-        visit.members.some((member) => member.name === myInfo.name)
+        visit.members.some((member) => member.memberId.name === myInfo.name)
       );
 
       myVisitsInThisRestaurant.forEach((myVisit) => {
@@ -52,15 +52,22 @@ router.get("/me", authenticateToken, async (req, res, next) => {
         name: restaurant.name,
         location: restaurant.location,
         bannerImageUrl: restaurant.bannerImageUrl,
-        myVisits: myVisitsInThisRestaurant.map((visit) => ({
-          visit_count: visit.visit_count,
-          visit_date: visit.visit_date,
-          myRating:
-            visit.members.find((m) => m.name === myInfo.name)?.rating || null,
-          myReviewText:
-            visit.members.find((m) => m.name === myInfo.name)?.reviewText || "",
-        })),
         overallRatingAverage: restaurant.ratingAverage,
+        myVisits: myVisitsInThisRestaurant.map((visit) => {
+          const myMemberInThisVisit = visit.members.find(
+            (m) => m.memberId && m.memberId._id.toString() === loggedInMemberId
+          );
+
+          console.log(myMemberInThisVisit);
+          return {
+            visit_count: visit.visit_count,
+            visit_date: visit.visit_date,
+            myRating: myMemberInThisVisit ? myMemberInThisVisit.rating : null,
+            myReviewText: myMemberInThisVisit
+              ? myMemberInThisVisit.reviewText
+              : "",
+          };
+        }),
       });
     });
 
@@ -163,25 +170,52 @@ router.patch(
 );
 
 // 멤버 삭제 API (DELETE /api/members/:id)
-// authenticateToken 추후 추가 예정
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", authenticateToken, async (req, res, next) => {
   try {
-    const { id } = req.params;
-    // const loggedInMemberId = req.user._id;
+    const memberToDeleteId = req.params.id; // URL 파라미터로 받은 삭제 대상 멤버 ID
+    const loggedInMemberId = req.user._id; // 로그인한 사용자 본인의 ID
 
-    // if (id !== loggedInMemberId) {
-    //     return res.status(403).json({ message: "자신의 계정만 삭제할 수 있습니다." });
-    // }
+    if (memberToDeleteId !== loggedInMemberId) {
+      return res
+        .status(403)
+        .json({ message: "자신의 계정만 삭제할 수 있습니다." });
+    }
 
-    const result = await Member.findByIdAndDelete(id);
-
-    if (!result) {
+    // 1. 삭제 대상 멤버를 Member 컬렉션에서 찾습니다.
+    const member = await Member.findById(memberToDeleteId);
+    if (!member) {
       return res
         .status(404)
         .json({ message: "삭제할 멤버를 찾을 수 없습니다." });
     }
 
-    console.log(`멤버 삭제: ID ${id} (${result.name})`);
+    // 2. 이 멤버가 방문한 모든 라멘집 기록에서 memberId 참조를 null로 설정합니다.
+    const updateRamenResult = await RamenRestaurant.updateMany(
+      { "visits.members.memberId": memberToDeleteId },
+      { $set: { "visits.members.$[elem].memberId": null } },
+      { arrayFilters: [{ "elem.memberId": memberToDeleteId }] }
+    );
+    console.log(
+      `RamenRestaurant visited memberId references updated: ${updateRamenResult.modifiedCount}`
+    );
+
+    // 3. 이 멤버가 추천한 모든 방문 예정 라멘집 기록에서 recommendedBy 참조를 null로 설정합니다.
+    const updatePlannedRamenResult = await PlannedRamenRestaurant.updateMany(
+      { recommendedBy: memberToDeleteId },
+      { $set: { recommendedBy: null } } // recommendedBy를 null로
+    );
+    console.log(
+      `PlannedRamenRestaurant recommendedBy references updated: ${updatePlannedRamenResult.modifiedCount}`
+    );
+
+    // 4. 마지막으로 Member 컬렉션에서 해당 멤버를 삭제합니다.
+    const deleteMemberResult = await Member.findByIdAndDelete(memberToDeleteId);
+
+    if (!deleteMemberResult) {
+      return res.status(404).json({ message: "멤버 삭제에 실패했습니다." });
+    }
+
+    console.log(`멤버 삭제 완료: ID ${memberToDeleteId} (${member.name})`);
     res.status(200).json({ message: "계정이 성공적으로 삭제되었습니다." });
   } catch (error) {
     console.error("Error deleting member:", error);
