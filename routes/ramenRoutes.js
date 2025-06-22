@@ -40,22 +40,14 @@ router.post(
     }
 
     if (!name || !location || !visitDate || initialVisitMembers.length === 0) {
-      if (req.file) {
-        fs.unlink(req.file.path, (err) => {
-          if (err) console.error("Error deleting incomplete upload:", err);
-        });
-      }
+      if (req.file) fs.unlinkSync(req.file.path);
       return res.status(400).json({
-        message:
-          "필수 필드를 모두 입력해주세요: 이름, 위치, 방문일자, 동행 멤버",
+        message: "필수 필드를 모두 입력해주세요: 이름, 위치, 방문일자, 멤버",
       });
     }
 
     try {
       const processedMembers = [];
-      let currentVisitRatingsSum = 0;
-      let currentVisitMembersWithRatingCount = 0;
-
       if (initialVisitMembers && initialVisitMembers.length > 0) {
         for (const member of initialVisitMembers) {
           const existingMember = await Member.findOne({ name: member.name });
@@ -68,9 +60,7 @@ router.post(
             });
           }
           processedMembers.push({
-            name: existingMember.name,
-            imageUrl: existingMember.imageUrl,
-            role: existingMember.role,
+            memberId: existingMember._id,
             rating: null,
             reviewText: "",
           });
@@ -111,9 +101,14 @@ router.post(
 
         await restaurant.save();
         console.log(`재방문 기록 추가 및 업데이트: ${name} (${visitDate})`);
+
+        const populatedRestaurant = await RamenRestaurant.findById(
+          restaurant._id
+        ).populate("visits.members.memberId", "name nickname imageUrl role");
+
         res.status(200).json({
           message: "라멘집 재방문 기록이 성공적으로 추가되었습니다.",
-          restaurant,
+          restaurant: populatedRestaurant,
         });
       } else {
         // 첫 방문인 경우: 새로운 라멘집 데이터 생성
@@ -138,9 +133,14 @@ router.post(
         });
         await newRamenRestaurant.save();
         console.log(`새로운 라멘집 추가: ${name}`);
+
+        const populatedRestaurant = await RamenRestaurant.findById(
+          newRamenRestaurant._id
+        ).populate("visits.members.memberId", "name nickname imageUrl role");
+
         res.status(201).json({
           message: "새로운 라멘집이 성공적으로 추가되었습니다.",
-          restaurant: newRamenRestaurant,
+          restaurant: populatedRestaurant,
         });
       }
     } catch (error) {
@@ -165,11 +165,10 @@ router.patch(
   "/:restaurantId/visits/:visitCount/members/:memberName/rating",
   authenticateToken,
   async (req, res, next) => {
-    const { restaurantId, visitCount, memberName } = req.params; // URL 파라미터에서 라멘집 ID, 방문 횟수, 멤버 이름 추출
-    const { rating, reviewText } = req.body; // 요청 본문에서 별점 추출
+    const { restaurantId, visitCount, memberName } = req.params; // memberName은 URL 파라미터. 이제 memberId로 찾는게 더 정확.
+    const { rating, reviewText } = req.body;
     const loggedInMemberId = req.user._id;
 
-    // 별점 유효성 검사 (0~5점)
     if (rating === undefined || rating === null || rating < 0 || rating > 5) {
       return res
         .status(400)
@@ -177,7 +176,6 @@ router.patch(
     }
 
     try {
-      // 라멘집을 ID로 찾기
       const restaurant = await RamenRestaurant.findById(restaurantId);
       if (!restaurant) {
         return res
@@ -185,7 +183,6 @@ router.patch(
           .json({ message: "해당 라멘집을 찾을 수 없습니다." });
       }
 
-      // 해당 방문 기록 찾기 (visit_count를 정수로 변환하여 비교)
       const visitIndex = restaurant.visits.findIndex(
         (v) => v.visit_count === parseInt(visitCount)
       );
@@ -194,32 +191,36 @@ router.patch(
           message: `방문 횟수 #${visitCount}에 해당하는 기록을 찾을 수 없습니다.`,
         });
       }
-      const targetVisit = restaurant.visits[visitIndex]; // 찾은 방문 기록
+      const targetVisit = restaurant.visits[visitIndex];
 
-      // 해당 멤버 찾기 및 별점 업데이트
-      const memberIndex = targetVisit.members.findIndex(
-        (m) => m.name === memberName
+      // ✨ 변경: memberId를 기준으로 멤버 찾기 ✨
+      const actualMember = await Member.findOne({ name: memberName }); // memberName으로 실제 Member를 찾아 _id를 얻음
+      if (!actualMember) {
+        // 해당 이름의 멤버가 존재하지 않는 경우
+        return res
+          .status(404)
+          .json({ message: `'${memberName}' 이름의 멤버를 찾을 수 없습니다.` });
+      }
+
+      const memberInVisitIndex = targetVisit.members.findIndex(
+        (m) => m.memberId.toString() === actualMember._id.toString()
       );
-      if (memberIndex === -1) {
+      if (memberInVisitIndex === -1) {
         return res.status(404).json({
-          message: `'${memberName}' 이름의 멤버를 해당 방문 기록에서 찾을 수 없습니다.`,
+          message: `'${memberName}' 이름의 멤버가 해당 방문 기록에 참여하지 않았습니다.`,
         });
       }
 
-      const targetMemberInVisit = targetVisit.members[memberIndex];
-      const actualMember = await Member.findOne({
-        name: targetMemberInVisit.name,
-      });
-
-      if (!actualMember || actualMember._id.toString() !== loggedInMemberId) {
+      // ✨ 권한 부여: 로그인한 유저 ID와 방문 기록 내 멤버의 _id 비교 ✨
+      if (actualMember._id.toString() !== loggedInMemberId) {
         return res
           .status(403)
           .json({ message: "자신의 별점만 수정할 수 있습니다." });
       }
 
-      // 멤버의 별점/후기 업데이트
-      targetVisit.members[memberIndex].rating = rating;
-      targetVisit.members[memberIndex].reviewText = reviewText || "";
+      // 멤버의 별점 및 후기 업데이트
+      targetVisit.members[memberInVisitIndex].rating = rating;
+      targetVisit.members[memberInVisitIndex].reviewText = reviewText || "";
 
       // 해당 방문(visit)의 평균 별점 다시 계산
       let currentVisitRatingsSum = 0;
@@ -235,7 +236,7 @@ router.patch(
           ? currentVisitRatingsSum / currentVisitMembersWithRatingCount
           : 0;
 
-      // 라멘집의 전체 평균 별점 다시 계산
+      // 전체 평균 평점 다시 계산
       let allRatingsSum = 0;
       let allMembersCount = 0;
       restaurant.visits.forEach((visit) => {
@@ -249,22 +250,27 @@ router.patch(
       restaurant.ratingAverage =
         allMembersCount > 0 ? allRatingsSum / allMembersCount : 0;
 
-      await restaurant.save(); // 변경된 라멘집 데이터 저장
+      await restaurant.save();
 
       console.log(
         `라멘집 ${restaurant.name}의 ${visitCount}번째 방문에 '${memberName}' 멤버 별점 ${rating}, 후기 업데이트.`
       );
+
+      // ✨ 변경: 응답 시 restaurant 객체의 visits.members.memberId를 populate하여 반환 ✨
+      const populatedRestaurant = await RamenRestaurant.findById(
+        restaurant._id
+      ).populate("visits.members.memberId", "name nickname imageUrl role");
+
       res.status(200).json({
         message: "멤버 별점 및 후기가 성공적으로 업데이트되었습니다.",
-        restaurant,
+        restaurant: populatedRestaurant,
       });
     } catch (error) {
-      console.error("별점 업데이트 오류:", error);
+      console.error("별점 및 후기 업데이트 오류:", error);
       next(error);
     }
   }
 );
-
 // 방문한 라멘집 삭제 API (DELETE /api/visited-ramen/:id)
 router.delete("/:id", authenticateToken, async (req, res, next) => {
   try {
@@ -315,9 +321,11 @@ router.delete("/:id", authenticateToken, async (req, res, next) => {
 // 모든 방문 라멘집 조회 (GET /api/visited-ramen)
 router.get("/", async (req, res, next) => {
   try {
-    const ramenRestaurants = await RamenRestaurant.find({}).sort({
-      createdAt: -1,
-    });
+    const ramenRestaurants = await RamenRestaurant.find({})
+      .sort({
+        createdAt: -1,
+      })
+      .populate("visits.members.memberId", "name nickname imageUrl role");
     res.status(200).json(ramenRestaurants);
   } catch (error) {
     console.error("라멘집 조회 오류:", error);
@@ -328,7 +336,12 @@ router.get("/", async (req, res, next) => {
 // 특정 라멘집 상세 조회 (ID 기준) (GET /api/visited-ramen/:id)
 router.get("/:id", async (req, res, next) => {
   try {
-    const restaurant = await RamenRestaurant.findById(req.params.id);
+    const restaurant = await RamenRestaurant.findById(req.params.id).populate(
+      "visits.members.memberId",
+      "name nickname imageUrl role"
+    );
+
+    console.log(restaurant);
     if (!restaurant) {
       return res
         .status(404)

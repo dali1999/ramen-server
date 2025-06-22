@@ -112,17 +112,15 @@ router.patch(
           .json({ message: "사용자 정보를 찾을 수 없습니다." });
       }
 
-      if (name !== undefined) {
-        if (name !== member.name) {
-          const existingMemberWithName = await Member.findOne({ name: name });
-          if (existingMemberWithName) {
-            if (req.file) {
-              fs.unlinkSync(req.file.path);
-            }
-            return res
-              .status(409)
-              .json({ message: "이미 사용 중인 이름입니다." });
+      if (name !== undefined && name !== member.name) {
+        const existingMemberWithName = await Member.findOne({ name: name });
+        if (existingMemberWithName) {
+          if (req.file) {
+            fs.unlinkSync(req.file.path);
           }
+          return res
+            .status(409)
+            .json({ message: "이미 사용 중인 이름입니다." });
         }
         member.name = name;
       }
@@ -135,11 +133,6 @@ router.patch(
       // 이미지 URL 업데이트
       if (newProfileImageUrl !== undefined) {
         member.imageUrl = newProfileImageUrl;
-      } else {
-        // 파일이 업로드되지 않았지만, imageUrl을 비우거나 기본값으로 되돌리고 싶을 수 있습니다.
-        // 현재 로직은 파일을 보내지 않으면 기존 이미지를 유지합니다.
-        // 만약 '이미지 없음' 버튼 등을 통해 이미지를 비울 수 있게 하려면 추가 로직 필요.
-        // 예를 들어, req.body.clearImage: true 같은 필드를 받아서 member.imageUrl = Member.schema.paths.imageUrl.defaultValue;
       }
 
       await member.save();

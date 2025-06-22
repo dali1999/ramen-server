@@ -3,9 +3,14 @@ const mongoose = require("mongoose");
 // 방문 멤버 스키마
 const VisitMemberSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    imageUrl: { type: String },
-    role: { type: String, enum: ["user", "admin"], default: "user" },
+    // name: { type: String, required: true },
+    // imageUrl: { type: String },
+    // role: { type: String, enum: ["user", "admin"], default: "user" },
+    memberId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Member",
+      required: false,
+    },
     rating: { type: Number, min: 0, max: 5, default: null },
     reviewText: { type: String, default: "" },
   },
