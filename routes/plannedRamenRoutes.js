@@ -6,59 +6,72 @@ const {
   authenticateToken,
   authorizeAdmin,
 } = require("../middleware/authMiddleware");
+const upload = require("../utils/upload");
 
 // 방문 예정 라멘집 추가 API (POST /api/planned-ramen)
-router.post("/", authenticateToken, async (req, res, next) => {
-  const { name, bannerImageUrl, location, recommendationComment } = req.body;
-  const recommenderId = req.user._id;
+router.post(
+  "/",
+  authenticateToken,
+  upload.single("plannedBannerImage"),
+  async (req, res, next) => {
+    const { name, location, recommendationComment } = req.body;
+    const bannerImageUrl = req.file ? req.file.location : undefined;
+    const recommenderId = req.user._id;
 
-  if (!name || !location) {
-    return res.status(400).json({
-      message: "방문 예정 라멘집 이름과 위치는 필수입니다.",
-    });
-  }
-
-  try {
-    const existingRecommender = await Member.findById(recommenderId);
-    if (!existingRecommender) {
+    if (!name || !location) {
+      if (req.file) {
+        // TODO: S3 delete object logic here if recommender invalid
+      }
       return res.status(400).json({
-        message: `인증된 사용자가 유효하지 않습니다. 다시 로그인해주세요.`,
+        message: "방문 예정 라멘집 이름과 위치는 필수입니다.",
       });
     }
 
-    const newPlannedRamen = new PlannedRamenRestaurant({
-      name,
-      bannerImageUrl,
-      location,
-      recommendedBy: recommenderId,
-      recommendationComment,
-    });
-    await newPlannedRamen.save();
-    console.log(`방문 예정 라멘집 추가: ${name}`);
+    try {
+      const existingRecommender = await Member.findById(recommenderId);
+      if (!existingRecommender) {
+        if (req.file) {
+          // TODO: S3 delete object logic here if recommender invalid
+        }
+        return res.status(400).json({
+          message: `인증된 사용자가 유효하지 않습니다. 다시 로그인해주세요.`,
+        });
+      }
 
-    res.status(201).json({
-      message: "방문 예정 라멘집이 성공적으로 추가되었습니다.",
-      plannedRamen: {
-        ...newPlannedRamen._doc,
-        recommendedBy: {
-          _id: existingRecommender._id,
-          name: existingRecommender.name,
-          role: existingRecommender.role,
-          nickname: existingRecommender.nickname,
-          imageUrl: existingRecommender.imageUrl,
-        },
-      },
-    });
-  } catch (error) {
-    console.error("Error adding planned ramen:", error);
-    if (error.code === 11000) {
-      return res
-        .status(409)
-        .json({ message: `이미 존재하는 라멘집: ${name} (${location})` });
+      const newPlannedRamen = new PlannedRamenRestaurant({
+        name,
+        bannerImageUrl:
+          bannerImageUrl ||
+          PlannedRamenRestaurant.schema.paths.bannerImageUrl.defaultValue,
+        location,
+        recommendedBy: recommenderId,
+        recommendationComment,
+      });
+      await newPlannedRamen.save();
+      console.log(`방문 예정 라멘집 추가: ${name}`);
+
+      const populatedPlannedRamen = await PlannedRamenRestaurant.findById(
+        newPlannedRamen._id
+      ).populate("recommendedBy", "name nickname imageUrl role");
+
+      res.status(201).json({
+        message: "방문 예정 라멘집이 성공적으로 추가되었습니다.",
+        plannedRamen: populatedPlannedRamen,
+      });
+    } catch (error) {
+      console.error("Error adding planned ramen:", error);
+      if (req.file) {
+        // 오류 시 업로드된 파일 삭제 (S3에서 수동 삭제 필요)
+      }
+      if (error.code === 11000) {
+        return res
+          .status(409)
+          .json({ message: `이미 존재하는 라멘집: ${name} (${location})` });
+      }
+      next(error);
     }
-    next(error);
   }
-});
+);
 
 // 방문 예정 라멘집 삭제 API (DELETE /api/planned-ramen/:id)
 router.delete(

@@ -356,7 +356,7 @@ router.get("/:id", async (req, res, next) => {
 
 //============================= 이미지 업로드
 
-// 5.X. 라멘집 이미지 업로드/수정 API (PATCH /api/visited-ramen/:id/images)
+// 라멘집 이미지 업로드/수정 API (PATCH /api/visited-ramen/:id/images)
 router.patch(
   "/:id/images",
   authenticateToken,
@@ -407,7 +407,7 @@ router.patch(
   }
 );
 
-// 5.X. 라멘집 이미지 조회 API (GET /api/visited-ramen/:id/images)
+// 라멘집 이미지 조회 API (GET /api/visited-ramen/:id/images)
 router.get("/:id/images", async (req, res, next) => {
   try {
     const { id } = req.params;
