@@ -9,6 +9,7 @@ const authRoutes = require("./routes/authRoutes");
 const memberRoutes = require("./routes/memberRoutes");
 const ramenRoutes = require("./routes/ramenRoutes");
 const plannedRamenRoutes = require("./routes/plannedRamenRoutes");
+const scheduleRoutes = require("./routes/scheduleRoutes");
 
 // 전역 에러 핸들러
 const errorHandler = require("./middleware/errorHandler");
@@ -49,6 +50,7 @@ app.use("/api/auth", authRoutes); // /api/auth/register, /api/auth/login
 app.use("/api/members", memberRoutes); // /api/members (조회, 삭제)
 app.use("/api/visited-ramen", ramenRoutes); // /api/visited-ramen (추가, 조회, 삭제, 별점 수정)
 app.use("/api/planned-ramen", plannedRamenRoutes); // /api/planned-ramen (추가, 조회, 삭제)
+app.use("/api/schedules", scheduleRoutes);
 
 // --- 전역 에러 핸들러 (모든 라우터 뒤에 위치해야 함) ---
 app.use(errorHandler);
