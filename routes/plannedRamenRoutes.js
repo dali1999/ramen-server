@@ -85,7 +85,7 @@ router.delete("/:id", authenticateToken, async (req, res, next) => {
     }
 
     // 2. 일반 사용자일 경우, 자신이 생성한 라멘집인지 확인
-    if (restaurant.createdBy && restaurant.createdBy.toString() === loggedInMemberId) {
+    if (restaurant.recommendedBy && restaurant.recommendedBy._id.toString() === loggedInMemberId) {
       await PlannedRamenRestaurant.findByIdAndDelete(id);
       console.log(`생성자에 의해 추천 라멘집 삭제: ID ${id}`);
       return res.status(200).json({
