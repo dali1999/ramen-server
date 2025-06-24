@@ -27,14 +27,14 @@ const s3Storage = multerS3({
   key: function (req, file, cb) {
     // S3에 저장될 파일명 (unique한 이름 사용)
     // 예: profile-images/1678888888888-originalFilename.png
-    const filename = `images/${Date.now().toString()}-${file.originalname}`;
+    const filename = `webp/${Date.now().toString()}-${file.originalname}`;
     cb(null, filename);
   },
 });
 
 const upload = multer({
   storage: s3Storage, // S3 스토리지 사용
-  limits: { fileSize: 5 * 1024 * 1024 }, // 파일 크기 제한 (5MB)
+  limits: { fileSize: 3 * 1024 * 1024 }, // 파일 크기 제한 (5MB)
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = filetypes.test(file.mimetype);
