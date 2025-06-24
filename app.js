@@ -19,7 +19,7 @@ const port = process.env.PORT || 3000;
 // --- CORS 설정 ---
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://192.168.55.112:5173", "https://ramen-road.netlify.app"],
+    origin: ["http://localhost:5173", "http://192.168.55.112:5173", "http://172.30.1.73:5173", "https://ramen-road.netlify.app"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
