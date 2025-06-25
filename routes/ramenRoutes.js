@@ -31,6 +31,7 @@ router.post("/", authenticateToken, upload.single("bannerImage"), async (req, re
   if (req.file) {
     try {
       const optimizedImageBuffer = await sharp(req.file.buffer)
+        .rotate()
         .resize({ width: 800, fit: "inside", withoutEnlargement: true }) // 라멘 배너에 맞는 크기
         .webp({ quality: 80 })
         .toBuffer();

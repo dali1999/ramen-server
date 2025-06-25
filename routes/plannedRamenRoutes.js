@@ -18,6 +18,7 @@ router.post("/", authenticateToken, upload.single("plannedBannerImage"), async (
   if (req.file) {
     try {
       const optimizedImageBuffer = await sharp(req.file.buffer)
+        .rotate()
         .resize({ width: 800, fit: "inside", withoutEnlargement: true })
         .webp({ quality: 80 })
         .toBuffer();

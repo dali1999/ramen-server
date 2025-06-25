@@ -33,6 +33,7 @@ router.post("/register", upload.single("profileImage"), async (req, res, next) =
     try {
       // 1. 메모리에 있는 이미지 버퍼를 sharp로 처리
       const optimizedImageBuffer = await sharp(req.file.buffer)
+        .rotate()
         .resize({ width: 200, height: 200, fit: "cover", withoutEnlargement: true })
         .webp({ quality: 70 })
         .toBuffer();
