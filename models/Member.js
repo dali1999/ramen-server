@@ -7,7 +7,7 @@ const MemberSchema = new mongoose.Schema({
   nickname: { type: String, default: "맨즈" },
   imageUrl: {
     type: String,
-    default: "https://ramen-road-images.s3.ap-northeast-2.amazonaws.com/images/default-profile.png",
+    default: "", // 기본 이미지 넣기
   },
   email: {
     type: String,

@@ -4,12 +4,42 @@ const PlannedRamenRestaurant = require("../models/PlannedRamenRestaurant");
 const Member = require("../models/Member"); // Member 모델 임포트 (추천자 확인용)
 const { authenticateToken, authorizeAdmin } = require("../middleware/authMiddleware");
 const upload = require("../utils/upload");
+const sharp = require("sharp");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const path = require("path");
 
 // 방문 예정 라멘집 추가 API (POST /api/planned-ramen)
 router.post("/", authenticateToken, upload.single("plannedBannerImage"), async (req, res, next) => {
   const { name, location, recommendationComment } = req.body;
-  const bannerImageUrl = req.file ? req.file.location : undefined;
+  let bannerImageUrl;
   const recommenderId = req.user._id;
+
+  // ✨ 이미지 최적화 및 S3 업로드 로직 ✨
+  if (req.file) {
+    try {
+      const optimizedImageBuffer = await sharp(req.file.buffer)
+        .resize({ width: 800, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+
+      const s3Key = `webp/${Date.now().toString()}-${path.parse(req.file.originalname).name}.webp`; // S3 Key (폴더명/고유이름.webp)
+      const uploadParams = {
+        Bucket: S3_BUCKET_NAME,
+        Key: s3Key,
+        Body: optimizedImageBuffer,
+        ContentType: "image/webp",
+        ACL: "public-read",
+      };
+
+      const s3UploadResult = await s3Client.send(new PutObjectCommand(uploadParams));
+      bannerImageUrl = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
+    } catch (optimizationError) {
+      console.error("Image optimization/S3 upload error (banner):", optimizationError);
+      bannerImageUrl = PlannedRamenRestaurant.schema.paths.bannerImageUrl.defaultValue;
+    }
+  } else {
+    bannerImageUrl = PlannedRamenRestaurant.schema.paths.bannerImageUrl.defaultValue;
+  }
 
   if (!name || !location) {
     if (req.file) {
